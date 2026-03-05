@@ -1,0 +1,4 @@
+inurl:myshopify.com "logistics"
+"powered by shopify" "logistics" -inurl:myshopify.com
+inurl:/wp-content/plugins/woocommerce "logistics"
+site:.com "shipping & returns" "track order" "logistics"
