@@ -39,3 +39,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# lead-scraper generated data
+/lead-scraper/data/progress.json
+/lead-scraper/data/results.csv
+/lead-scraper/data/results.jsonl
+/lead-scraper/data/runtime-queries.txt
+/lead-scraper/data/targets.csv
+/lead-scraper/data/targets.txt
+/lead-scraper/crawler/__pycache__/
+*.pyc
