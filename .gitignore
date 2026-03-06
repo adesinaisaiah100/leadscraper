@@ -49,3 +49,4 @@ next-env.d.ts
 /lead-scraper/data/targets.txt
 /lead-scraper/crawler/__pycache__/
 *.pyc
+.vscode/
