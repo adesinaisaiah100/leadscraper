@@ -10,6 +10,7 @@ type Body = {
   delay?: number;
   crtKeyword?: string;
   crtLimit?: number;
+  minQualityThreshold?: number;
 };
 
 export async function POST(req: Request) {
@@ -33,12 +34,22 @@ export async function POST(req: Request) {
   const delay = Math.min(15, Math.max(0, body.delay || 2));
   const crtKeyword = (body.crtKeyword || "").trim();
   const crtLimit = Math.min(20000, Math.max(100, body.crtLimit || 3000));
+  const minQualityThreshold = Math.min(100, Math.max(0, body.minQualityThreshold ?? 50));
 
-  const result = await runDiscovery({ queries, source, pages, delay, crtKeyword, crtLimit });
+  const result = await runDiscovery({
+    queries,
+    source,
+    pages,
+    delay,
+    crtKeyword,
+    crtLimit,
+    minQualityThreshold,
+  });
   return NextResponse.json(
     {
       ok: result.ok,
       source,
+      minQualityThreshold,
       command: result.command,
       code: result.code,
       stdout: result.stdout,

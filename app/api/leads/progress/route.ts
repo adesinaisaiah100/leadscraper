@@ -23,7 +23,17 @@ const EMPTY_PROGRESS = {
   pct_tier_c: 0,
   avg_pages_scanned: 0,
   avg_seconds_per_domain: 0,
+  priority_pages_scanned: 0,
+  sitemap_urls_examined: 0,
   retries_used_total: 0,
+  queue_pending: 0,
+  queue_processing: 0,
+  queue_completed: 0,
+  queue_failed: 0,
+  throughput_domains_per_minute: 0,
+  success_rate_by_source: {},
+  success_rate_by_platform: {},
+  fail_reasons_distribution: {},
   updated_at: null,
 };
 

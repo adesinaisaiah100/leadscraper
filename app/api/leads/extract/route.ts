@@ -46,6 +46,6 @@ export async function POST(req: Request) {
       stdout: result.stdout,
       stderr: result.stderr,
     },
-    { status: result.ok ? 200 : 500 },
+    { status: result.ok ? 200 : result.code === -1 ? 409 : 500 },
   );
 }
