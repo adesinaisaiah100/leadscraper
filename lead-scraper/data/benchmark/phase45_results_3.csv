@@ -1,0 +1,4 @@
+domain,url,best_contact_type,best_contact_value,confidence_score,email_primary,email_all,email_source,source_page_type,email_valid_syntax,email_valid_mx,instagram,facebook,linkedin,x,tiktok,pinterest,platform,platform_detected,status,tier,discovery_quality_score,contact_confidence_score,lead_score,lead_score_v2,quality_flags,is_healthy,quality_gate_pass,pages_scanned,priority_pages_scanned,sitemap_urls_examined,crawl_ms,retries_used,error
+avada.io,https://avada.io,,,0,,,,,False,,,,,,,,unknown,unknown,error,tier_c,0,0,0,0,,false,false,0,0,0,0,0,blocked_by_robots
+koala-apps.io,https://koala-apps.io,,,0,,,,,False,,,,,,,,unknown,unknown,error,tier_c,0,0,0,0,,false,false,0,0,0,0,0,blocked_by_robots
+nichedropshipping.com,https://nichedropshipping.com,,,0,,,,,False,,,,,,,,unknown,unknown,error,tier_c,0,0,0,0,,false,false,0,0,0,0,0,blocked_by_robots

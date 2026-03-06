@@ -1,0 +1,22 @@
+{
+  "running": false,
+  "domains_total": 60,
+  "total": 60,
+  "domains_processed": 60,
+  "processed": 60,
+  "remaining": 0,
+  "emails_found": 4,
+  "ok": 8,
+  "no_contact": 38,
+  "error": 14,
+  "tier_a": 4,
+  "tier_b": 4,
+  "tier_c": 52,
+  "pct_tier_a": 6.67,
+  "pct_tier_b": 6.67,
+  "pct_tier_c": 86.67,
+  "avg_pages_scanned": 0.35,
+  "avg_seconds_per_domain": 4.4,
+  "retries_used_total": 0,
+  "updated_at": "2026-03-06T12:17:14Z"
+}
