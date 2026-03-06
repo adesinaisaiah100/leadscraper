@@ -9,6 +9,7 @@ import json
 import re
 import time
 import urllib.parse
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
@@ -23,6 +24,51 @@ DEFAULT_UA = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/123.0.0.0 Safari/537.36"
 )
+SOCIAL_HOST_MARKERS = (
+    "instagram.com",
+    "facebook.com",
+    "linkedin.com",
+    "twitter.com",
+    "x.com",
+    "tiktok.com",
+)
+PARKED_MARKERS = (
+    "domain for sale",
+    "buy this domain",
+    "this domain may be for sale",
+    "is parked",
+    "parkingcrew",
+    "sedo",
+    "hugedomains",
+    "cashparking",
+)
+PLACEHOLDER_MARKERS = (
+    "coming soon",
+    "under construction",
+    "default web site page",
+    "test page",
+    "lorem ipsum",
+)
+INTENT_MARKERS = (
+    "/products",
+    "cart",
+    "checkout",
+    "add to cart",
+)
+
+
+@dataclass
+class TargetAssessment:
+    url: str
+    domain: str
+    platform_detected: str
+    target_quality_score: int
+    quality_flags: list[str]
+    is_healthy: bool
+
+
+def clamp_int(value: int, low: int, high: int) -> int:
+    return max(low, min(high, value))
 
 
 def normalize_url(raw: str) -> str | None:
@@ -196,6 +242,117 @@ def fetch_crt_myshopify(
     return found
 
 
+def detect_platform(url: str, html_lower: str) -> str:
+    u = url.lower()
+    if "cdn.shopify.com" in html_lower or "shopify.theme" in html_lower or "myshopify.com" in u:
+        return "shopify"
+    if "woocommerce" in html_lower or "wp-content/plugins/woocommerce" in html_lower:
+        return "woocommerce"
+    if "mage/cookies.js" in html_lower or "magento" in html_lower:
+        return "magento"
+    if "cdn11.bigcommerce.com" in html_lower or "bigcommerce" in html_lower:
+        return "bigcommerce"
+    return "unknown"
+
+
+def score_target(session: requests.Session, url: str, timeout_seconds: int) -> TargetAssessment:
+    parsed = urllib.parse.urlparse(url)
+    domain = parsed.netloc.lower()
+    if domain.startswith("www."):
+        domain = domain[4:]
+    flags: list[str] = []
+    score = 0
+    is_healthy = False
+    platform_detected = "unknown"
+
+    response = request_with_retries(
+        session=session,
+        method="GET",
+        url=url,
+        timeout_seconds=timeout_seconds,
+        allow_redirects=True,
+    )
+    if not response:
+        flags.append("fetch_failed")
+        return TargetAssessment(
+            url=url,
+            domain=domain,
+            platform_detected=platform_detected,
+            target_quality_score=score,
+            quality_flags=flags,
+            is_healthy=False,
+        )
+
+    status_code = response.status_code
+    flags.append(f"status_{status_code}")
+    body_lower = response.text.lower() if response.text else ""
+    content_type = (response.headers.get("content-type", "") or "").lower()
+    if "text/html" not in content_type:
+        flags.append("non_html_response")
+    soup = BeautifulSoup(response.text or "", "html.parser")
+    hrefs = [link.get("href", "").lower() for link in soup.find_all("a", href=True)]
+    blob = " ".join([body_lower, " ".join(hrefs)])
+
+    is_parked = any(marker in body_lower for marker in PARKED_MARKERS)
+    is_placeholder = any(marker in body_lower for marker in PLACEHOLDER_MARKERS)
+    if is_parked:
+        flags.append("parked_page")
+    if is_placeholder:
+        flags.append("placeholder_page")
+
+    if status_code == 200 and "text/html" in content_type and not is_parked and not is_placeholder:
+        flags.append("healthy_http")
+        is_healthy = True
+        score += 30
+
+    platform_detected = detect_platform(str(response.url), body_lower)
+    if platform_detected != "unknown":
+        flags.append(f"platform_{platform_detected}")
+        score += 30
+
+    intent_hits = 0
+    for marker in INTENT_MARKERS:
+        token = marker.lower()
+        if token in blob:
+            intent_hits += 1
+            flags.append(f"intent_{token.replace(' ', '_').replace('/', '')}")
+    if intent_hits > 0:
+        score += min(25, intent_hits * 8)
+
+    contact_hits = 0
+    if "/contact" in blob or "contact us" in blob:
+        contact_hits += 1
+        flags.append("contact_page")
+    if "mailto:" in blob:
+        contact_hits += 1
+        flags.append("mailto_present")
+    social_hits = 0
+    for host in SOCIAL_HOST_MARKERS:
+        if host in blob:
+            social_hits += 1
+    if social_hits > 0:
+        flags.append("social_links")
+        score += min(10, social_hits * 3)
+    if contact_hits > 0:
+        score += min(15, contact_hits * 8)
+
+    if is_parked:
+        score -= 40
+    if is_placeholder:
+        score -= 20
+    if status_code >= 400:
+        score -= 30
+
+    return TargetAssessment(
+        url=url,
+        domain=domain,
+        platform_detected=platform_detected,
+        target_quality_score=clamp_int(score, 0, 100),
+        quality_flags=sorted(set(flags)),
+        is_healthy=is_healthy,
+    )
+
+
 def load_queries(cli_queries: list[str], queries_file: Path | None) -> list[str]:
     queries: list[str] = []
     queries.extend(q.strip() for q in cli_queries if q.strip())
@@ -213,17 +370,45 @@ def load_queries(cli_queries: list[str], queries_file: Path | None) -> list[str]
     return ordered
 
 
-def write_outputs(urls: list[str], output_txt: Path, output_csv: Path) -> None:
+def write_outputs(
+    assessments: list[TargetAssessment],
+    output_txt: Path,
+    output_csv: Path,
+    min_quality_threshold: int,
+) -> None:
     output_txt.parent.mkdir(parents=True, exist_ok=True)
     output_csv.parent.mkdir(parents=True, exist_ok=True)
 
-    output_txt.write_text("\n".join(urls) + ("\n" if urls else ""), encoding="utf-8")
+    eligible_urls = [
+        row.url
+        for row in assessments
+        if row.is_healthy and row.target_quality_score >= min_quality_threshold
+    ]
+    output_txt.write_text("\n".join(eligible_urls) + ("\n" if eligible_urls else ""), encoding="utf-8")
 
     with output_csv.open("w", newline="", encoding="utf-8") as fp:
         writer = csv.writer(fp)
-        writer.writerow(["url"])
-        for url in urls:
-            writer.writerow([url])
+        writer.writerow(
+            [
+                "url",
+                "domain",
+                "platform_detected",
+                "target_quality_score",
+                "quality_flags",
+                "is_healthy",
+            ]
+        )
+        for row in assessments:
+            writer.writerow(
+                [
+                    row.url,
+                    row.domain,
+                    row.platform_detected,
+                    row.target_quality_score,
+                    "|".join(row.quality_flags),
+                    str(row.is_healthy).lower(),
+                ]
+            )
 
 
 def unique(items: Iterable[str]) -> list[str]:
@@ -280,6 +465,12 @@ def parse_args() -> argparse.Namespace:
         default=Path("lead-scraper/data/targets.csv"),
         help="Output CSV file of discovered URLs.",
     )
+    parser.add_argument(
+        "--min-quality-threshold",
+        type=int,
+        default=50,
+        help="Minimum quality score required to include target in TXT extraction input.",
+    )
     return parser.parse_args()
 
 
@@ -320,8 +511,28 @@ def main() -> int:
         discovered.extend(crt_results)
 
     final_urls = unique(discovered)
-    write_outputs(final_urls, args.output, args.output_csv)
-    print(json.dumps({"saved": len(final_urls), "output": str(args.output), "output_csv": str(args.output_csv)}, indent=2))
+    print(f"[quality] validating homepages: {len(final_urls)}")
+    assessments: list[TargetAssessment] = []
+    for idx, url in enumerate(final_urls, start=1):
+        if idx % 50 == 0:
+            print(f"[quality] scored {idx}/{len(final_urls)}")
+        assessments.append(score_target(session=session, url=url, timeout_seconds=max(5, args.timeout)))
+
+    min_quality_threshold = clamp_int(args.min_quality_threshold, 0, 100)
+    write_outputs(assessments, args.output, args.output_csv, min_quality_threshold=min_quality_threshold)
+    kept = sum(1 for row in assessments if row.is_healthy and row.target_quality_score >= min_quality_threshold)
+    print(
+        json.dumps(
+            {
+                "saved_csv": len(assessments),
+                "saved_txt": kept,
+                "min_quality_threshold": min_quality_threshold,
+                "output": str(args.output),
+                "output_csv": str(args.output_csv),
+            },
+            indent=2,
+        )
+    )
     return 0
 
 

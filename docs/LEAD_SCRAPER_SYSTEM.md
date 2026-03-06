@@ -26,7 +26,8 @@ Optimization notes:
 7. `GET /api/leads/progress` for live run counters and tier metrics.
 8. `GET /api/leads/status` for output file readiness/history.
 9. `GET /api/leads/top` for filtered ranked leads.
-10. User downloads CSV via `GET /api/leads/download`.
+10. Optional reset flow: `POST /api/leads/reset` to stop extraction and clear extraction outputs.
+11. User downloads CSV via `GET /api/leads/download`.
 
 ## 3. Architecture
 
@@ -36,7 +37,7 @@ File: `app/page.tsx`
 
 Features:
 
-- Discovery controls: source, DDG pages, CRT keyword, CRT limit, queries
+- Discovery controls: source, DDG pages, CRT keyword, CRT limit, min quality threshold, queries
 - Extraction controls:
 - workers
 - max pages
@@ -58,6 +59,7 @@ Features:
 
 - `POST /api/leads/discover`
 - `POST /api/leads/extract`
+- `POST /api/leads/reset`
 - `GET /api/leads/progress`
 - `GET /api/leads/status`
 - `GET /api/leads/top`
@@ -89,7 +91,11 @@ Implemented:
 - retry + backoff (`1s`, `2s`, `4s`)
 - CRT discovery with retry handling
 - URL normalization and dedupe
-- TXT + CSV output
+- homepage validation and per-target quality scoring
+- platform detection (`shopify`, `woocommerce`, `magento`, `bigcommerce`)
+- quality flags + health checks (status/content/parked/placeholder)
+- thresholded TXT output for extraction input
+- full scored CSV output
 
 ## 3.5 Extraction Script
 
@@ -101,16 +107,24 @@ Implemented extraction layers:
 2. visible regex extraction
 3. JSON-LD email extraction
 4. obfuscated email normalization and extraction
-5. policy/legal page extraction priority
-6. social fallback extraction (including Pinterest)
+5. domain guess candidates (`info@`, `contact@`, `hello@`, `support@`, `sales@`)
+6. social profile enrichment extraction
+7. policy/legal page extraction priority
+8. social fallback extraction (including Pinterest)
 
 Implemented reliability logic:
 
 - retries + backoff on page fetch
 - max pages/domain
+- crawl order: homepage -> priority paths -> sitemap priority -> generic
+- sitemap discovery (`/sitemap.xml` + sitemap index parsing)
 - per-domain early stop when confidence reaches threshold
 - robots check at root
 - domain-level error isolation
+- SQLite queue state with `pending`, `processing`, `completed`, `failed`, `retry_count`
+- chunked queue claiming via `batch-size` for large runs
+- resumable execution by persisted queue database
+- per-domain concurrency cap and retry budget controls
 
 Implemented quality logic:
 
@@ -118,6 +132,10 @@ Implemented quality logic:
 - domain-match preference in confidence scoring
 - optional MX validation with local cache file
 - tier classification (`tier_a`, `tier_b`, `tier_c`)
+- source attribution with `source_page_type`
+- split scoring fields: `discovery_quality_score` + `contact_confidence_score`
+- score versioning: legacy `lead_score` + weighted `lead_score_v2`
+- quality gate pass/fail with unhealthy/parked-like domain penalties
 
 ## 4. Data Outputs
 
@@ -126,6 +144,11 @@ Implemented quality logic:
 Columns:
 
 - `url`
+- `domain`
+- `platform_detected`
+- `target_quality_score`
+- `quality_flags`
+- `is_healthy`
 
 ## 4.2 Extraction Output (`results.csv`)
 
@@ -139,6 +162,7 @@ Columns:
 - `email_primary`
 - `email_all`
 - `email_source`
+- `source_page_type`
 - `email_valid_syntax`
 - `email_valid_mx`
 - `instagram`
@@ -148,10 +172,19 @@ Columns:
 - `tiktok`
 - `pinterest`
 - `platform`
+- `platform_detected`
 - `status`
 - `tier`
+- `discovery_quality_score`
+- `contact_confidence_score`
 - `lead_score`
+- `lead_score_v2`
+- `quality_flags`
+- `is_healthy`
+- `quality_gate_pass`
 - `pages_scanned`
+- `priority_pages_scanned`
+- `sitemap_urls_examined`
 - `crawl_ms`
 - `retries_used`
 - `error`
@@ -169,7 +202,14 @@ Core fields:
 - `pct_tier_a`, `pct_tier_b`, `pct_tier_c`
 - `avg_pages_scanned`
 - `avg_seconds_per_domain`
+- `priority_pages_scanned`
+- `sitemap_urls_examined`
 - `retries_used_total`
+- `queue_pending`, `queue_processing`, `queue_completed`, `queue_failed`
+- `throughput_domains_per_minute`
+- `success_rate_by_source`
+- `success_rate_by_platform`
+- `fail_reasons_distribution`
 - `updated_at`
 
 ## 5. Contact Intelligence Model
@@ -187,6 +227,8 @@ Confidence model (implemented):
 - `policy`: 80
 - `jsonld`: 70
 - `obfuscated`: 60
+- `social_profile`: 55
+- `domain_guess`: 50
 - social fallback baseline: 40
 
 Domain-match bonus is applied to email confidence.
@@ -195,6 +237,7 @@ Domain-match bonus is applied to email confidence.
 
 - discovery source: `crt` for baseline
 - CRT limit: `300-1000` for tests
+- min quality threshold: `50`
 - workers: `3-5`
 - pages/domain: `4-5`
 - timeout: `15-20s`

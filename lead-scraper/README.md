@@ -51,6 +51,14 @@ Outputs:
 - `lead-scraper/data/results.csv`
 - `lead-scraper/data/progress.json` (live extraction progress)
 
+## Stop + Clear (Dashboard)
+
+Use the dashboard `Stop + Clear Extraction` action to:
+
+- stop an active extraction run
+- clear extraction outputs (`results.csv`, `results.jsonl`, `progress.json`)
+- reset Top Leads/progress for a fresh discovery + extraction cycle
+
 ## Recommended Test Settings
 
 - Discovery: `source=crt`, `crt-limit=300..1000`, `crt-keyword=` (empty)
