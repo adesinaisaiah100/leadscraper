@@ -1,0 +1,7 @@
+node_modules
+.next
+.git
+lead-scraper/data/baseline_results.csv
+lead-scraper/data/current_results.csv
+lead-scraper/__pycache__
+*.md

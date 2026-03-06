@@ -1,0 +1,14 @@
+services:
+  ecomscrape:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecomscrape-app
+    ports:
+      - "3000:3000"
+    volumes:
+      # Optional: persist data/results across container restarts
+      - ./lead-scraper/data:/app/lead-scraper/data
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
