@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tool 1: zero-cost lead discovery using DDG static HTML + optional crt.sh."""
+"""Tool 1: zero-cost lead discovery using Brave, Bing RSS, and optional crt.sh."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import json
 import re
 import time
 import urllib.parse
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -16,7 +17,8 @@ from typing import Iterable
 import requests
 from bs4 import BeautifulSoup
 
-DDG_HTML_URL = "https://html.duckduckgo.com/html/"
+BRAVE_SEARCH_URL = "https://search.brave.com/search"
+BING_SEARCH_URL = "https://www.bing.com/search"
 CRT_SH_URL = "https://crt.sh/"
 BACKOFF_STEPS = (1, 2, 4)
 DEFAULT_UA = (
@@ -54,6 +56,12 @@ INTENT_MARKERS = (
     "cart",
     "checkout",
     "add to cart",
+)
+SEARCH_ENGINE_BLOCKLIST = (
+    "search.brave.com",
+    "brave.com",
+    "bing.com",
+    "microsoft.com",
 )
 
 
@@ -95,15 +103,6 @@ def normalize_url(raw: str) -> str | None:
     return f"{parsed.scheme.lower()}://{netloc}"
 
 
-def decode_ddg_redirect(url: str) -> str:
-    if "uddg=" not in url:
-        return url
-    query = urllib.parse.urlparse(url).query
-    params = urllib.parse.parse_qs(query)
-    target = params.get("uddg", [url])[0]
-    return urllib.parse.unquote(target)
-
-
 def request_with_retries(
     session: requests.Session,
     method: str,
@@ -122,20 +121,38 @@ def request_with_retries(
             last_err = exc
             if attempt < len(BACKOFF_STEPS):
                 time.sleep(backoff)
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:  # pragma: no cover - defensive network guard
+            last_err = exc
+            if attempt < len(BACKOFF_STEPS):
+                time.sleep(backoff)
     if last_err:
         print(f"[http] {method} {url} failed after retries: {last_err}")
     return None
 
 
-def extract_ddg_links(html: str) -> list[str]:
+def normalize_result_url(raw: str) -> str | None:
+    clean = normalize_url(raw)
+    if not clean:
+        return None
+
+    parsed = urllib.parse.urlparse(clean)
+    host = parsed.netloc.lower()
+    if any(marker in host for marker in SEARCH_ENGINE_BLOCKLIST):
+        return None
+    return clean
+
+
+def extract_brave_links(html: str) -> list[str]:
     soup = BeautifulSoup(html, "html.parser")
     candidates: list[str] = []
 
     selectors = [
-        "a.result__a",
-        "a[data-testid='result-title-a']",
-        ".result a[href]",
-        ".links_main a[href]",
+        "a[data-test='result-title-a']",
+        "a.snippet-title[href]",
+        "div[data-type='web'] a[href]",
+        "main a[href]",
     ]
     for selector in selectors:
         for link in soup.select(selector):
@@ -143,23 +160,36 @@ def extract_ddg_links(html: str) -> list[str]:
             if href:
                 candidates.append(href)
 
-    # Fallback parsing: include any likely outbound link.
     if not candidates:
         for link in soup.find_all("a", href=True):
-            href = link.get("href", "")
-            if "uddg=" in href or href.startswith(("http://", "https://", "//")):
-                candidates.append(href)
+            candidates.append(link.get("href", ""))
 
     out: list[str] = []
     for href in candidates:
-        actual_url = decode_ddg_redirect(href)
-        clean = normalize_url(actual_url)
-        if clean and "duckduckgo.com" not in clean:
+        if href.startswith("/") or href.startswith("#") or href.startswith("javascript:"):
+            continue
+        clean = normalize_result_url(href)
+        if clean:
             out.append(clean)
     return out
 
 
-def scrape_ddg_query(
+def extract_bing_rss_links(xml_text: str) -> list[str]:
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+
+    out: list[str] = []
+    for item in root.findall("./channel/item"):
+        link_text = (item.findtext("link") or "").strip()
+        clean = normalize_result_url(link_text)
+        if clean:
+            out.append(clean)
+    return out
+
+
+def scrape_brave_query(
     session: requests.Session,
     query: str,
     pages: int,
@@ -169,21 +199,63 @@ def scrape_ddg_query(
     urls: list[str] = []
 
     for page_index in range(pages):
-        # DDG static HTML supports offset through "s".
-        offset = page_index * 30
-        payload = {"q": query, "s": str(offset)}
-
         response = request_with_retries(
             session=session,
-            method="POST",
-            url=DDG_HTML_URL,
-            data=payload,
+            method="GET",
+            url=BRAVE_SEARCH_URL,
+            params={
+                "q": query,
+                "source": "web",
+                "offset": str(page_index * 20),
+            },
+            timeout_seconds=timeout_seconds,
+        )
+        if not response:
+            break
+        if response.status_code == 429:
+            print(f"[brave] rate limited for query: {query}")
+            break
+        if response.status_code != 200:
+            break
+
+        extracted = extract_brave_links(response.text)
+        if not extracted:
+            break
+
+        urls.extend(extracted)
+
+        if page_index < pages - 1:
+            time.sleep(delay_seconds)
+
+    return urls
+
+
+def scrape_bing_query(
+    session: requests.Session,
+    query: str,
+    pages: int,
+    delay_seconds: float,
+    timeout_seconds: int,
+) -> list[str]:
+    urls: list[str] = []
+
+    for page_index in range(pages):
+        response = request_with_retries(
+            session=session,
+            method="GET",
+            url=BING_SEARCH_URL,
+            params={
+                "q": query,
+                "format": "rss",
+                "setlang": "en",
+                "first": str((page_index * 10) + 1),
+            },
             timeout_seconds=timeout_seconds,
         )
         if not response or response.status_code != 200:
             break
 
-        extracted = extract_ddg_links(response.text)
+        extracted = extract_bing_rss_links(response.text)
         if not extracted:
             break
 
@@ -423,7 +495,7 @@ def unique(items: Iterable[str]) -> list[str]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Discover e-commerce/logistics target URLs using DDG dorks and optional crt.sh."
+        description="Discover target URLs using Brave, Bing RSS, and optional crt.sh."
     )
     parser.add_argument(
         "--query",
@@ -439,12 +511,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--source",
-        choices=["ddg", "crt", "both"],
-        default="ddg",
+        choices=["brave", "bing", "crt", "both"],
+        default="both",
         help="Discovery source to use.",
     )
-    parser.add_argument("--pages", type=int, default=2, help="DDG pages per query.")
-    parser.add_argument("--delay", type=float, default=2.0, help="Delay between DDG page requests in seconds.")
+    parser.add_argument("--pages", type=int, default=2, help="Search result pages per query for Brave/Bing.")
+    parser.add_argument("--delay", type=float, default=2.0, help="Delay between Brave/Bing page requests in seconds.")
     parser.add_argument("--timeout", type=int, default=20, help="HTTP timeout in seconds.")
     parser.add_argument(
         "--crt-keyword",
@@ -478,26 +550,47 @@ def main() -> int:
     args = parse_args()
     queries = load_queries(args.query, args.queries_file)
 
-    if args.source in {"ddg", "both"} and not queries:
-        raise SystemExit("At least one --query (or --queries-file) is required for ddg source.")
+    if args.source in {"brave", "bing"} and not queries:
+        raise SystemExit("At least one --query (or --queries-file) is required for brave/bing sources.")
 
     session = requests.Session()
-    session.headers.update({"User-Agent": DEFAULT_UA})
+    session.headers.update(
+        {
+            "User-Agent": DEFAULT_UA,
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+    )
 
     discovered: list[str] = []
 
-    if args.source in {"ddg", "both"}:
+    if args.source in {"brave", "both"} and queries:
         for query in queries:
-            print(f"[ddg] query: {query}")
-            results = scrape_ddg_query(
+            print(f"[brave] query: {query}")
+            results = scrape_brave_query(
                 session=session,
                 query=query,
                 pages=max(1, args.pages),
                 delay_seconds=max(0.0, args.delay),
                 timeout_seconds=max(5, args.timeout),
             )
-            print(f"[ddg] found: {len(results)}")
+            print(f"[brave] found: {len(results)}")
             discovered.extend(results)
+
+    if args.source in {"bing", "both"} and queries:
+        for query in queries:
+            print(f"[bing] query: {query}")
+            results = scrape_bing_query(
+                session=session,
+                query=query,
+                pages=max(1, args.pages),
+                delay_seconds=max(0.0, args.delay),
+                timeout_seconds=max(5, args.timeout),
+            )
+            print(f"[bing] found: {len(results)}")
+            discovered.extend(results)
+
+    if args.source == "both" and not queries:
+        print("[search] no queries provided; skipping Brave/Bing and using CRT only")
 
     if args.source in {"crt", "both"}:
         print(f"[crt] fetching myshopify certs (keyword={args.crt_keyword or 'none'})")

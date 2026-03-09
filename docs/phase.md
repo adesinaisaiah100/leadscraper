@@ -6,7 +6,7 @@ Upgrade the current lead scraper into a higher-quality, scalable contact-intelli
 
 ## Current Baseline (from your system docs)
 
-- Discovery: DDG + CRT, URL dedupe, `targets.txt` and `targets.csv`
+- Discovery: Brave + Bing + CRT, URL dedupe, quality scoring, `targets.txt` and `targets.csv`
 - Extraction: email/social extraction + scoring + progress tracking
 - UI: controls for discovery/extraction, top leads filters, progress, reset
 

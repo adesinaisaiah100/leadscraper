@@ -4,7 +4,7 @@ Python discovery and extraction engine used by the Next.js dashboard.
 
 ## Scripts
 
-- `discovery/discover.py`: discovers target domains from DDG/CRT
+- `discovery/discover.py`: discovers target domains from Brave/Bing/CRT
 - `crawler/extract_contacts.py`: crawls targets and extracts emails/socials
 - `crawler/regex_utils.py`: shared extraction regex patterns
 
@@ -16,10 +16,16 @@ python -m pip install -r lead-scraper\requirements.txt
 
 ## Discovery Examples
 
-DDG only:
+Brave only:
 
 ```powershell
-python lead-scraper\discovery\discover.py --queries-file lead-scraper\data\queries.txt --source ddg --pages 2 --delay 2
+python lead-scraper\discovery\discover.py --queries-file lead-scraper\data\queries.txt --source brave --pages 2 --delay 2
+```
+
+Bing only:
+
+```powershell
+python lead-scraper\discovery\discover.py --queries-file lead-scraper\data\queries.txt --source bing --pages 2 --delay 2
 ```
 
 CRT only (recommended baseline):
@@ -67,7 +73,8 @@ Use the dashboard `Stop + Clear Extraction` action to:
 ## Notes
 
 - `CRT keyword` filters subdomain text and can easily remove most results.
-- DDG can intermittently produce zero results due anti-bot responses.
+- Brave can intermittently rate-limit public scraping.
+- Bing RSS is the most stable zero-cost search source in the current stack.
 - Extractor checks `robots.txt` at domain root before crawling.
 - Discovery and extraction use retry/backoff steps: `1s`, `2s`, `4s`.
 - Results now include `domain`, `email_primary`, `email_all`, `platform`, `status`, and `lead_score`.

@@ -14,7 +14,7 @@ If discovery returns many non-business sites or dead stores, extraction will alw
 
 Right now your sources are mainly:
 
-DDG search
+Bing / Brave search
 
 certificate logs
 

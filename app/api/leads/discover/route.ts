@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 type Body = {
   queries?: string[];
-  source?: "ddg" | "crt" | "both";
+  source?: "brave" | "bing" | "crt" | "both";
   pages?: number;
   delay?: number;
   crtKeyword?: string;
@@ -22,14 +22,14 @@ export async function POST(req: Request) {
   }
 
   const queries = (body.queries || []).map((q) => q.trim()).filter(Boolean);
-  if (queries.length === 0 && body.source !== "crt") {
+  if (queries.length === 0 && body.source !== "crt" && body.source !== "both") {
     return NextResponse.json(
-      { ok: false, error: "Provide at least one query unless source is crt." },
+      { ok: false, error: "Provide at least one query unless source is crt or combined mode." },
       { status: 400 },
     );
   }
 
-  const source = body.source || "ddg";
+  const source = body.source || "both";
   const pages = Math.min(10, Math.max(1, body.pages || 2));
   const delay = Math.min(15, Math.max(0, body.delay || 2));
   const crtKeyword = (body.crtKeyword || "").trim();

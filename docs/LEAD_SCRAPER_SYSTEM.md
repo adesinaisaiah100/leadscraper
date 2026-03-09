@@ -37,7 +37,7 @@ File: `app/page.tsx`
 
 Features:
 
-- Discovery controls: source, DDG pages, CRT keyword, CRT limit, min quality threshold, queries
+- Discovery controls: source, search pages, CRT keyword, CRT limit, min quality threshold, queries
 - Extraction controls:
 - workers
 - max pages
@@ -86,15 +86,15 @@ File: `lead-scraper/discovery/discover.py`
 
 Implemented:
 
-- DDG scraping with multi-selector parsing + fallback
-- DDG redirect decoding (`uddg`)
+- Brave public search scraping with graceful rate-limit handling
+- Bing RSS discovery for more stable zero-cost web search coverage
 - retry + backoff (`1s`, `2s`, `4s`)
 - CRT discovery with retry handling
 - URL normalization and dedupe
 - homepage validation and per-target quality scoring
 - platform detection (`shopify`, `woocommerce`, `magento`, `bigcommerce`)
 - quality flags + health checks (status/content/parked/placeholder)
-- thresholded TXT output for extraction input
+- thresholded TXT output for extraction input so only likely email/social-yielding domains reach the crawler
 - full scored CSV output
 
 ## 3.5 Extraction Script
@@ -235,7 +235,7 @@ Domain-match bonus is applied to email confidence.
 
 ## 6. Runtime Defaults (Recommended)
 
-- discovery source: `crt` for baseline
+- discovery source: `both` for production, `crt` for Shopify-only baseline
 - CRT limit: `300-1000` for tests
 - min quality threshold: `50`
 - workers: `3-5`
@@ -247,7 +247,7 @@ Domain-match bonus is applied to email confidence.
 
 ## 7. Known Constraints
 
-1. DDG may intermittently return low/no results due anti-bot behavior.
+1. Brave may rate-limit public scraping, so combined mode should rely on Bing + CRT as stable fallbacks.
 2. MX validation increases runtime and depends on DNS/network quality.
 3. Some domains block scraping despite conservative settings.
 4. Very large target sets require long execution windows.

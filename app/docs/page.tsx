@@ -46,7 +46,7 @@ export default function DocsPage() {
                 <div className="absolute -top-4 -left-4 w-12 h-12 bg-blue-500/20 text-blue-400 flex items-center justify-center rounded-2xl font-bold text-xl border border-blue-500/20 rotate-[-rotated]">1</div>
                 <h3 className="text-xl font-bold text-white mb-4 mt-2 group-hover:text-blue-400 transition-colors">Discovery</h3>
                 <p className="text-slate-400 leading-relaxed">
-                  The app searches the internet (via DuckDuckGo or Certificate Transparency logs) to mass-discover websites matching your target keywords.
+                  The app searches the internet using Brave, Bing RSS, and Certificate Transparency logs to discover websites that are worth crawling for direct emails or strong social contact paths.
                 </p>
               </div>
 
@@ -90,9 +90,10 @@ export default function DocsPage() {
                 <div>
                   <h4 className="text-white font-semibold mb-2">Source Mode</h4>
                   <p className="text-sm text-slate-400 leading-relaxed">
-                    <strong className="text-slate-300">DDG Only:</strong> Uses DuckDuckGo search. Best for local businesses &amp; general niches.<br/>
-                    <strong className="text-slate-300">CRT Only:</strong> Scans SSL certificates. Best for E-Commerce/Shopify discovery.<br/>
-                    <strong className="text-slate-300">Combined:</strong> Uses both for maximum coverage.
+                    <strong className="text-slate-300">Brave Only:</strong> Tries public Brave web search. Useful as an extra zero-cost discovery layer, but may rate-limit.<br/>
+                    <strong className="text-slate-300">Bing Only:</strong> Uses Bing RSS search results. Best for general niche discovery because it is more stable in server-side scraping.<br/>
+                    <strong className="text-slate-300">CRT Only:</strong> Scans SSL certificates. Best for Shopify / hosted-commerce discovery.<br/>
+                    <strong className="text-slate-300">Combined:</strong> Uses Brave + Bing + CRT for maximum coverage while still filtering by extractable business quality.
                   </p>
                 </div>
                 <div>
@@ -101,15 +102,15 @@ export default function DocsPage() {
                 </div>
                 <div>
                   <h4 className="text-white font-semibold mb-2">CRT Keyword &amp; Limit</h4>
-                  <p className="text-sm text-slate-400 leading-relaxed">Only used in CRT or Combined mode. Represents the domain wildcard (e.g., &quot;logistics&quot;) and the max certificates to pull (up to 20,000).</p>
+                  <p className="text-sm text-slate-400 leading-relaxed">Used in CRT or Combined mode. It filters certificate-derived Shopify hosts before the extraction pipeline checks whether they have real pages, contact signals, carts, or socials.</p>
                 </div>
                 <div>
                   <h4 className="text-white font-semibold mb-2">Min Quality</h4>
-                  <p className="text-sm text-slate-400 leading-relaxed">Filters out junk parked domains <em>before</em> extraction. Set to <strong>50+</strong> for E-commerce (they have carts). Set to <strong>10 or 20</strong> for local businesses (they don&apos;t have carts).</p>
+                  <p className="text-sm text-slate-400 leading-relaxed">Filters out junk parked domains <em>before</em> extraction. This matters because the extractor is optimized for real contact discovery: direct emails first, then high-signal socials. Set to <strong>50+</strong> for E-commerce and <strong>10 or 20</strong> for local/service niches.</p>
                 </div>
                 <div className="md:col-span-2">
                   <h4 className="text-white font-semibold mb-2">Search Queries</h4>
-                  <p className="text-sm text-slate-400 leading-relaxed">Enter one query per line. Use Google dorks like <code>inurl:myshopify.com &quot;shoes&quot;</code> to hyper-target your discovery phase.</p>
+                  <p className="text-sm text-slate-400 leading-relaxed">Enter one query per line. These feed Brave and Bing. Use commercial-intent queries like <code>inurl:myshopify.com &quot;shoes&quot;</code> or <code>&quot;roofing contractor&quot; &quot;contact us&quot;</code> so the later extractor lands on sites likely to expose emails or business socials.</p>
                 </div>
               </div>
             </div>
@@ -208,7 +209,7 @@ export default function DocsPage() {
                   <ul className="space-y-3 text-sm text-slate-400">
                     <li className="flex justify-between border-b border-white/5 pb-2">
                       <span className="font-medium text-slate-300">Source Mode</span>
-                      <span className="text-white bg-white/10 px-2 py-0.5 rounded">Combined (DDG + CRT)</span>
+                      <span className="text-white bg-white/10 px-2 py-0.5 rounded">Combined (Brave + Bing + CRT)</span>
                     </li>
                     <li className="flex justify-between border-b border-white/5 pb-2">
                       <span className="font-medium text-slate-300">CRT Keyword</span>
@@ -258,7 +259,7 @@ export default function DocsPage() {
                   <ul className="space-y-3 text-sm text-slate-400">
                     <li className="flex justify-between border-b border-white/5 pb-2">
                       <span className="font-medium text-slate-300">Source Mode</span>
-                      <span className="text-white bg-white/10 px-2 py-0.5 rounded">DDG Only</span>
+                      <span className="text-white bg-white/10 px-2 py-0.5 rounded">Bing Only or Combined</span>
                     </li>
                     <li className="flex justify-between border-b border-white/5 pb-2">
                       <span className="font-medium text-slate-300">Pages per Query</span>

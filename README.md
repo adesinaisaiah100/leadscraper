@@ -6,7 +6,8 @@ Zero-cost e-commerce lead discovery and contact extraction with a Next.js contro
 
 - A web dashboard to run discovery and extraction from the browser
 - Discovery via:
-- DuckDuckGo static HTML dorks
+- Brave public web search
+- Bing RSS web search
 - `crt.sh` certificate transparency logs (`myshopify.com` footprint)
 - Contact extraction crawler that gathers:
 - Emails
@@ -69,10 +70,11 @@ Open `http://localhost:3000`.
 ### Discovery
 
 - Pick `Source`:
-- `ddg`: dork discovery only
+- `brave`: Brave web discovery only
+- `bing`: Bing web discovery only
 - `crt`: certificate discovery only
-- `both`: combines both
-- Set `Pages per Query` (DDG)
+- `both`: combines Brave + Bing + CRT
+- Set `Pages per Query` (Brave/Bing)
 - Set `CRT Keyword` (optional; usually leave blank unless filtering by subdomain text)
 - Set `CRT Limit` (start low for testing, e.g. 300–1000)
 - Enter queries (one per line)
@@ -149,17 +151,18 @@ Returns:
 
 Downloads CSV file as attachment.
 
-## DDG vs CRT Notes
+## Search Source Notes
 
-- DDG can intermittently return zero due anti-bot responses or dork strictness.
+- Brave can intermittently rate-limit public scraping.
+- Bing RSS is usually the most stable zero-cost search source in the stack.
 - CRT is good for broad Shopify footprint discovery.
 - `CRT Keyword` filters subdomain text; it is often too strict for generic words.
 
 Practical strategy:
 
-- Start with `source=crt`, empty `CRT Keyword`, moderate `CRT Limit`
+- Start with `source=both` for broad coverage, or `source=crt` for Shopify-first testing
 - Run extraction on sampled targets
-- Add DDG for niche targeting once baseline pipeline is stable
+- Use niche queries in Bing/Brave once baseline extraction quality is stable
 
 ## Troubleshooting
 
@@ -183,11 +186,12 @@ Handled gracefully now. Retry with:
 - lower `CRT Limit`
 - stable network
 
-### DDG returns zero
+### Brave or Bing returns zero
 
-- test broad query: `inurl:myshopify.com`
+- test a broader query first: `inurl:myshopify.com`
 - reduce strict quotes/operators
-- set `pages=1` for first check
+- use `source=both` so CRT still feeds extraction-quality candidates
+- keep `pages=1` for first checks
 
 ## Legal and Ethical Use
 
