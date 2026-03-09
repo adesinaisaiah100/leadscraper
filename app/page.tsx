@@ -94,7 +94,7 @@ type TopLeadRow = {
 
 export default function Home() {
   const [queriesText, setQueriesText] = useState(DEFAULT_QUERIES.join("\n"));
-  const [source, setSource] = useState<"ddg" | "crt" | "both">("ddg");
+  const [source, setSource] = useState<"brave" | "bing" | "crt" | "both">("both");
   const [pages, setPages] = useState(2);
   const [workers, setWorkers] = useState(5);
   const [maxPages, setMaxPages] = useState(5);
@@ -250,7 +250,16 @@ export default function Home() {
       });
       const data = await resp.json();
       const combined = [data.stdout, data.stderr].filter(Boolean).join("\n");
-      setLogText(`[discovery] ${data.ok ? "done" : "failed"}\n${combined || "No output."}`);
+      const fallback = data.ok
+        ? "No output."
+        : [
+            data.code !== undefined ? `Exit code: ${data.code}` : null,
+            data.command ? `Command: ${data.command}` : null,
+            "No output.",
+          ]
+            .filter(Boolean)
+            .join("\n");
+      setLogText(`[discovery] ${data.ok ? "done" : "failed"}\n${combined || fallback}`);
       await refreshStatus();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -357,7 +366,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="flex flex-1 flex-col lg:flex-row gap-8 p-8 max-w-[1600px] mx-auto w-full relative z-0">
+      <main className="flex flex-1 flex-col lg:flex-row gap-8 p-8 max-w-400 mx-auto w-full relative z-0">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/5 blur-[120px] pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-cyan-500/5 blur-[120px] pointer-events-none" />
 
@@ -377,11 +386,12 @@ export default function Home() {
                 <select
                   className="rounded-xl border border-white/10 bg-[#0f172a] text-white px-4 py-3 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                   value={source}
-                  onChange={(e) => setSource(e.target.value as "ddg" | "crt" | "both")}
+                  onChange={(e) => setSource(e.target.value as "brave" | "bing" | "crt" | "both")}
                 >
-                  <option value="ddg">DuckDuckGo Only</option>
+                  <option value="brave">Brave Search Only</option>
+                  <option value="bing">Bing Search Only</option>
                   <option value="crt">CRT Certificate Search Only</option>
-                  <option value="both">Combined (DDG + CRT)</option>
+                  <option value="both">Combined (Brave + Bing + CRT)</option>
                 </select>
               </label>
 

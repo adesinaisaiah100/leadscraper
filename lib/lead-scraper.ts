@@ -13,6 +13,8 @@ export const RESULTS_CSV = path.join(DATA_DIR, "results.csv");
 export const RESULTS_JSONL = path.join(DATA_DIR, "results.jsonl");
 export const PROGRESS_JSON = path.join(DATA_DIR, "progress.json");
 export const EXTRACT_QUEUE_DB = path.join(DATA_DIR, "extract_queue.sqlite");
+const DISCOVERY_SCRIPT = path.join(LEAD_SCRAPER_DIR, "discovery", "discover.py");
+const EXTRACT_SCRIPT = path.join(LEAD_SCRAPER_DIR, "crawler", "extract_contacts.py");
 
 function resolvePythonExecutable() {
   if (process.env.LEAD_SCRAPER_PYTHON) {
@@ -72,7 +74,10 @@ function runPython(args: string[], timeoutMs = 10 * 60 * 1000): Promise<ScriptRe
     const child = spawn(DEFAULT_PYTHON, args, {
       cwd: REPO_ROOT,
       windowsHide: true,
-      env: process.env,
+      env: {
+        ...process.env,
+        PYTHONUNBUFFERED: "1",
+      },
     });
 
     let stdout = "";
@@ -111,11 +116,15 @@ function runPython(args: string[], timeoutMs = 10 * 60 * 1000): Promise<ScriptRe
       }
       finished = true;
       clearTimeout(timer);
+      const fallbackError =
+        code === 0 || stdout.trim() || stderr.trim()
+          ? stderr
+          : `Process exited with code ${code ?? -1} without producing output. Command: ${command}`;
       resolve({
         ok: code === 0,
         code: code ?? -1,
         stdout,
-        stderr,
+        stderr: fallbackError,
         command,
       });
     });
@@ -128,7 +137,10 @@ function runExtractorPython(args: string[], timeoutMs: number): Promise<ScriptRe
     const child = spawn(DEFAULT_PYTHON, args, {
       cwd: REPO_ROOT,
       windowsHide: true,
-      env: process.env,
+      env: {
+        ...process.env,
+        PYTHONUNBUFFERED: "1",
+      },
     });
     activeExtractorChild = child;
 
@@ -168,11 +180,15 @@ function runExtractorPython(args: string[], timeoutMs: number): Promise<ScriptRe
       });
     });
     child.on("close", (code) => {
+      const fallbackError =
+        code === 0 || stdout.trim() || stderr.trim()
+          ? stderr
+          : `Process exited with code ${code ?? -1} without producing output. Command: ${command}`;
       finish({
         ok: code === 0,
         code: code ?? -1,
         stdout,
-        stderr,
+        stderr: fallbackError,
         command,
       });
     });
@@ -215,7 +231,7 @@ export async function clearExtractionOutputs() {
 
 export async function runDiscovery(opts: {
   queries: string[];
-  source: "ddg" | "crt" | "both";
+  source: "brave" | "bing" | "crt" | "both";
   pages: number;
   delay: number;
   crtKeyword: string;
@@ -224,7 +240,7 @@ export async function runDiscovery(opts: {
 }) {
   const queryPath = await writeRuntimeQueries(opts.queries);
   const args = [
-    path.join("lead-scraper", "discovery", "discover.py"),
+    DISCOVERY_SCRIPT,
     "--queries-file",
     queryPath,
     "--source",
@@ -242,9 +258,9 @@ export async function runDiscovery(opts: {
     "--min-quality-threshold",
     String(opts.minQualityThreshold),
     "--output",
-    path.join("lead-scraper", "data", "targets.txt"),
+    TARGETS_TXT,
     "--output-csv",
-    path.join("lead-scraper", "data", "targets.csv"),
+    TARGETS_CSV,
   ];
   return runPython(args);
 }
@@ -270,15 +286,15 @@ export async function runExtractor(opts: {
 
   await ensureDataDir();
   const args = [
-    path.join("lead-scraper", "crawler", "extract_contacts.py"),
+    EXTRACT_SCRIPT,
     "--input",
-    path.join("lead-scraper", "data", "targets.txt"),
+    TARGETS_TXT,
     "--output-jsonl",
-    path.join("lead-scraper", "data", "results.jsonl"),
+    RESULTS_JSONL,
     "--output-csv",
-    path.join("lead-scraper", "data", "results.csv"),
+    RESULTS_CSV,
     "--progress-file",
-    path.join("lead-scraper", "data", "progress.json"),
+    PROGRESS_JSON,
     "--workers",
     String(opts.workers),
     "--max-pages",
